@@ -14,6 +14,8 @@ PASTA_DE_ENTRADA = r'C:\ProcessarAtos\Entrada'
 ARQUIVO_DE_SAIDA_TXT = r'C:\ProcessarAtos\Saida\Atos_Unificados.txt'
 ARQUIVO_DE_SAIDA_JSONL = r'C:\ProcessarAtos\Saida\Atos_Unificados.jsonl'
 ARQUIVO_DE_LOG_ERROS = r'C:\ProcessarAtos\erros.log'
+# Caminho completo para o executável do LibreOffice
+CAMINHO_SOFFICE = r'C:\Program Files\LibreOffice\program\soffice.exe'
 # --- FIM DAS CONFIGURAÇÕES ---
 
 def converter_doc_para_docx(doc_path, log_erros_file):
@@ -21,39 +23,33 @@ def converter_doc_para_docx(doc_path, log_erros_file):
     Usa o LibreOffice para converter um arquivo .doc para .docx.
     """
     try:
-        # Cria uma subpasta para os arquivos convertidos para manter a organização
         output_dir = os.path.join(os.path.dirname(doc_path), 'convertidos_docx')
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        # Comando para o LibreOffice
         cmd = [
-            'soffice',
-            '--headless', # Roda sem interface gráfica
+            CAMINHO_SOFFICE,
+            '--headless',
             '--convert-to', 'docx',
             '--outdir', output_dir,
             doc_path
         ]
-        # Executa o comando e aguarda a finalização
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
-        # Retorna o caminho do novo arquivo .docx
         base_name = os.path.basename(doc_path)
         new_docx_path = os.path.join(output_dir, os.path.splitext(base_name)[0] + '.docx')
         
         if os.path.exists(new_docx_path):
             return new_docx_path
         else:
-            raise FileNotFoundError("Arquivo convertido não foi encontrado.")
+            raise FileNotFoundError("Arquivo convertido não foi encontrado após a execução do LibreOffice.")
 
     except FileNotFoundError:
-        # Erro comum se o LibreOffice não estiver no PATH do sistema
-        msg = f"ERRO DE CONVERSÃO (.doc): O comando 'soffice' não foi encontrado. Verifique se o LibreOffice está instalado e se a pasta 'program' está no PATH do sistema."
+        msg = f"ERRO DE CONVERSÃO (.doc): O executável 'soffice.exe' não foi encontrado no caminho especificado: {CAMINHO_SOFFICE}. Verifique o caminho."
         tqdm.write(msg)
         log_erros_file.write(f"{doc_path} - FALHA NA CONVERSÃO: {msg}\n")
         return None
     except subprocess.CalledProcessError as e:
-        # Outros erros durante a conversão
         msg = f"ERRO DE CONVERSÃO (.doc) para o arquivo '{os.path.basename(doc_path)}': {e.stderr.decode('utf-8', errors='ignore')}"
         tqdm.write(msg)
         log_erros_file.write(f"{doc_path} - FALHA NA CONVERSÃO: {msg}\n")
@@ -64,61 +60,41 @@ def converter_doc_para_docx(doc_path, log_erros_file):
         log_erros_file.write(f"{doc_path} - FALHA NA CONVERSÃO: {msg}\n")
         return None
 
-
 def obter_texto_sem_tachado(paragrafo):
     """
-    Processa um objeto de parágrafo, iterando sobre seus trechos ('runs')
-    e concatenando apenas o texto que NÃO está tachado (strikethrough).
+    Concatena o texto de trechos ('runs') de um parágrafo que não estão tachados.
     """
     texto_valido = []
     for run in paragrafo.runs:
-        # A propriedade 'strike' (tachado simples) e 'dstrike' (tachado duplo) são verificadas
-        if not run.font.strike and not run.font.dstrike:
+        # CORREÇÃO: Removida a verificação de 'dstrike' para compatibilidade com versões mais antigas da biblioteca.
+        if not run.font.strike:
             texto_valido.append(run.text)
     return "".join(texto_valido)
 
 def iter_block_items(parent):
-    """Função auxiliar para iterar sobre parágrafos e tabelas na ordem correta."""
-    if isinstance(parent, Document):
-        parent_elm = parent.element.body
-    elif isinstance(parent, _Cell):
-        parent_elm = parent._tc
-    else:
-        raise ValueError("Tipo de 'parent' não suportado")
-
+    """Itera sobre parágrafos e tabelas na ordem correta dentro de um elemento."""
+    if isinstance(parent, Document): parent_elm = parent.element.body
+    elif isinstance(parent, _Cell): parent_elm = parent._tc
+    else: raise ValueError("Tipo de 'parent' não suportado")
     for child in parent_elm.iterchildren():
-        if isinstance(child, docx.oxml.text.paragraph.CT_P):
-            yield Paragraph(child, parent)
-        elif isinstance(child, docx.oxml.table.CT_Tbl):
-            yield docx.table.Table(child, parent)
+        if isinstance(child, docx.oxml.text.paragraph.CT_P): yield Paragraph(child, parent)
+        elif isinstance(child, docx.oxml.table.CT_Tbl): yield docx.table.Table(child, parent)
 
 def extrair_texto_de_docx(docx_path, log_erros_file):
     """
-    Abre um arquivo .docx e retorna seu texto, ignorando trechos tachados
-    e incluindo o conteúdo de tabelas.
+    Extrai texto de um arquivo .docx, ignorando trechos tachados e lendo tabelas.
     """
     try:
         documento = docx.Document(docx_path)
         texto_completo = []
-        
         for block in iter_block_items(documento):
             if isinstance(block, Paragraph):
-                texto_limpo = obter_texto_sem_tachado(block)
-                texto_completo.append(texto_limpo)
+                texto_completo.append(obter_texto_sem_tachado(block))
             elif isinstance(block, Table):
                 for row in block.rows:
-                    celulas_limpas = []
-                    for cell in row.cells:
-                        texto_da_celula = "\n".join(
-                            [obter_texto_sem_tachado(p) for p in cell.paragraphs]
-                        )
-                        celulas_limpas.append(texto_da_celula)
-                    row_text = "\t".join(celulas_limpas)
-                    texto_completo.append(row_text)
-        
-        # Filtra linhas vazias que podem ter sido geradas por parágrafos totalmente tachados
+                    celulas_limpas = ["\n".join([obter_texto_sem_tachado(p) for p in cell.paragraphs]) for cell in row.cells]
+                    texto_completo.append("\t".join(celulas_limpas))
         return "\n".join(filter(None, texto_completo))
-        
     except Exception as e:
         msg = f"ERRO ao ler o arquivo '{os.path.basename(docx_path)}': {e}"
         tqdm.write(msg)
@@ -134,17 +110,16 @@ def main():
         return
 
     arquivos_para_processar = []
+    print("Buscando arquivos...")
     for root, _, files in os.walk(PASTA_DE_ENTRADA):
-        # Ignora a pasta 'convertidos_docx' para não processar arquivos duas vezes
-        if 'convertidos_docx' in root:
+        if os.path.basename(root) == 'convertidos_docx':
             continue
         for file in files:
-            # Agora busca por .doc e .docx
             if file.lower().endswith(('.doc', '.docx')) and not file.startswith('~'):
                 arquivos_para_processar.append(os.path.join(root, file))
 
     if not arquivos_para_processar:
-        print(f"Nenhum arquivo .doc ou .docx encontrado em '{PASTA_DE_ENTRADA}'.")
+        print(f"Nenhum arquivo .doc ou .docx encontrado em '{PASTA_DE_ENTRADA}'. Verifique a pasta e as permissões.")
         return
         
     print(f"Total de arquivos encontrados: {len(arquivos_para_processar)}")
@@ -159,14 +134,12 @@ def main():
         for file_path in tqdm(arquivos_para_processar, desc="Processando arquivos"):
             path_para_extrair = file_path
             
-            # Se for um arquivo .doc, converte primeiro
             if file_path.lower().endswith('.doc'):
                 path_para_extrair = converter_doc_para_docx(file_path, f_log)
             
-            # Se a conversão foi bem sucedida (ou se já era .docx)
             if path_para_extrair:
                 texto_extraido = extrair_texto_de_docx(path_para_extrair, f_log)
-                if texto_extraido and texto_extraido.strip(): # Garante que não está vazio
+                if texto_extraido and texto_extraido.strip():
                     nome_original = os.path.basename(file_path)
                     f_txt.write(f"--- INÍCIO DO DOCUMENTO: {nome_original} ---\n\n{texto_extraido}\n\n--- FIM DO DOCUMENTO: {nome_original} ---\n\n")
                     ato_data = {"fonte": nome_original, "conteudo": texto_extraido}
