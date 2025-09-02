@@ -1,5 +1,12 @@
 # **Unificador de Atos Normativos do TJMG**
 
+---
+**(English Summary)**
+
+This project contains a Python script designed to merge thousands of `.doc` and `.docx` files into single, clean text or JSONL files. It leverages LibreOffice for reliable `.doc` conversion and includes features like table extraction and removal of strikethrough text, making it ideal for preparing large document archives for AI training or data analysis.
+
+---
+
 Este projeto contém um script em Python desenvolvido para automatizar a tarefa de unificar dezenas de milhares de arquivos de atos normativos (`.doc` e `.docx`) em arquivos únicos e estruturados, prontos para serem utilizados como base de conhecimento para ferramentas de Inteligência Artificial.
 
 A solução foi criada para ser robusta, segura (rodando 100% localmente) e capaz de lidar com as particularidades de documentos legados, garantindo a máxima qualidade e integridade dos dados extraídos.
