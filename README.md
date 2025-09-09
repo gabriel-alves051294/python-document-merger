@@ -1,121 +1,92 @@
-# **Unificador de Documentos Word (.doc e .docx)**
+Processador e Unificador de Atos Normativos
+Este script em Python foi desenvolvido para automatizar o processo de consolidação de um grande volume de documentos de texto (.doc e .docx), como atos normativos, portarias, leis, etc. A ferramenta extrai o conteúdo textual, ignorando trechos revogados (tachados), e unifica tudo em arquivos de texto (.txt) com um tamanho máximo controlado, facilitando o manuseio e a análise posterior.
 
-**(English Summary)**
+Funcionalidades Principais
+Processamento em Lote: Varre recursivamente uma pasta de entrada e processa todos os arquivos .doc e .docx que encontrar.
 
-A Python tool designed to batch merge a large volume of Word documents (`.doc` and `.docx`) into single, clean text or JSONL files. While this tool is content-agnostic and can process any type of document, it was developed and battle-tested using a large archive of legal documents (normative acts from the TJMG Court of Justice). It's ideal for preparing large document archives for AI training or data analysis.
+Conversão Automática: Utiliza o LibreOffice em modo headless (sem interface gráfica) para converter arquivos do formato antigo .doc para o formato moderno .docx de forma transparente.
 
------
+Extração Inteligente de Conteúdo:
 
-## 📜 Sobre o Projeto
+Lê o conteúdo de parágrafos e tabelas.
 
-Este projeto apresenta uma solução em Python para a unificação e o processamento em lote de grandes volumes de documentos Word, nos formatos legados (`.doc`) e modernos (`.docx`).
+Ignora de forma inteligente qualquer texto que esteja formatado como tachado (strikethrough), que é comumente usado para indicar trechos revogados.
 
-Embora a ferramenta seja agnóstica ao conteúdo e possa unificar qualquer tipo de documento, ela foi desenvolvida e testada no contexto de um projeto real para consolidar dezenas de milhares de **atos normativos do Tribunal de Justiça de Minas Gerais (TJMG)**.
+Divisão de Arquivos por Tamanho: Consolida o texto extraído em arquivos .txt. Quando um arquivo de saída atinge um limite de tamanho configurável (ex: 2MB), o script automaticamente cria um novo arquivo para continuar o processo (ex: Atos_Unificados_1.txt, Atos_Unificados_2.txt, etc.).
 
-A solução foi criada para ser robusta e segura (rodando 100% localmente), gerando arquivos de saída limpos e estruturados, ideais para projetos de análise de dados, arquivamento digital ou para a criação de bases de conhecimento para modelos de Inteligência Artificial.
+Log de Erros Detalhado: Cria um arquivo de log (erros.log) que registra qualquer falha durante a conversão ou leitura de arquivos, informando qual documento apresentou problema e o motivo, facilitando a depuração.
 
-## ✨ Funcionalidades
+Barra de Progresso: Exibe uma barra de progresso (tqdm) para que o usuário possa acompanhar o andamento do processamento, especialmente útil para um grande número de arquivos.
 
-  * **Suporte a Múltiplos Formatos:** Processa nativamente arquivos `.docx` e `.doc`, garantindo compatibilidade com acervos de documentos mistos.
-  * **Conversão Robusta de Arquivos `.doc`:** Utiliza o LibreOffice para realizar a conversão, assegurando a máxima fidelidade na extração de conteúdo, incluindo elementos complexos como tabelas.
-  * **Limpeza e Tratamento de Dados:** Identifica e remove automaticamente textos marcados como "tachado" (strikethrough), assegurando que conteúdo revogado não seja incluído na base de dados final.
-  * **Extração de Conteúdo Abrangente:** Lê e extrai corretamente o texto do corpo dos documentos e de dentro de tabelas (Anexos).
-  * **Múltiplos Formatos de Saída:** Gera dois tipos de arquivo unificado para diferentes finalidades:
-      * **`.txt`:** Ideal para leitura humana e buscas textuais simples.
-      * **`.jsonl`:** Estruturado para consumo por sistemas, bancos de dados e modelos de IA.
-  * **Registro Detalhado de Erros (Logging):** Cria um log (`erros.log`) listando todos os arquivos que falharam durante o processamento e o motivo técnico da falha.
-  * **Otimização com Cache de Conversão:** Salva os arquivos `.doc` já convertidos em uma subpasta (`convertidos_docx`), o que pode otimizar significativamente futuras execuções.
+Caso de Uso
+Esta ferramenta é ideal para quem precisa:
 
-## 🛠️ Pré-requisitos
+Criar um corpus textual a partir de milhares de documentos para projetos de Processamento de Linguagem Natural (NLP).
 
-Para a correta execução do script, os seguintes softwares são necessários:
+Consolidar uma base de conhecimento dispersa em vários arquivos para facilitar a busca e a consulta.
 
-  * **Python 3.x:** A linguagem de programação do script.
+Preparar documentos para importação em sistemas de gestão de conteúdo ou bases de dados.
 
-      * [Download Oficial do Python](https://www.python.org/)
-      * **Importante:** Durante a instalação no Windows, marque a caixa "Add Python to PATH".
+Arquivar de forma organizada o conteúdo de atos normativos, mantendo apenas o texto vigente.
 
-  * **LibreOffice:** Pacote de escritório gratuito utilizado para a conversão segura dos arquivos `.doc`.
+Pré-requisitos
+Para executar o script, você precisará ter o seguinte instalado em seu sistema:
 
-      * [Download Oficial do LibreOffice](https://pt-br.libreoffice.org/baixe-ja/libreoffice-novo/)
+Python 3.6+
 
-## 🚀 Instalação e Configuração
+LibreOffice: A suíte de escritório é necessária para a conversão de arquivos .doc.
 
-Siga os passos abaixo para preparar o ambiente e rodar o projeto.
+Você pode baixar em LibreOffice.org.
 
-**1. Clone ou Baixe o Repositório**
+Bibliotecas Python: Instale as dependências com o seguinte comando:
 
-Utilize o Git para clonar o repositório:
-
-```bash
-git clone https://github.com/gabriel-alves051294/unificacao_docx.git
-cd unificacao_docx
-```
-
-Alternativamente, baixe o projeto como um arquivo ZIP e extraia-o em uma pasta de sua preferência.
-
-**2. Crie um Ambiente Virtual (Recomendado)**
-
-É uma boa prática isolar as dependências do projeto:
-
-```bash
-# No Windows
-python -m venv venv
-.\venv\Scripts\activate
-
-# No macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
-```
-
-**3. Instale as Bibliotecas Necessárias**
-
-Instale as dependências Python via terminal:
-
-```bash
 pip install python-docx tqdm
-```
 
-**4. Configure o Acesso ao LibreOffice**
+Configuração
+Antes de executar, você precisa ajustar as constantes no início do script processador_atos.py:
 
-O script precisa localizar a instalação do LibreOffice. A maneira mais robusta é adicionar sua pasta de instalação ao PATH do sistema operacional.
+# --- CONFIGURAÇÕES IMPORTANTES ---
 
-  * **Caminho Padrão no Windows:** `C:\Program Files\LibreOffice\program`
+# 1. Pasta onde estão os seus arquivos .doc e .docx
+PASTA_DE_ENTRADA = r'C:\ProcessarAtos\Entrada'
 
-## 🏃‍♂️ Como Usar
+# 2. Caminho e nome base para os arquivos de texto que serão gerados
+ARQUIVO_DE_SAIDA_TXT_BASE = r'C:\ProcessarAtos\Saida\Atos_Unificados'
 
-**1. Prepare a Estrutura de Pastas:**
-Crie uma estrutura de pastas para organizar os arquivos. Por exemplo:
+# 3. Caminho para o arquivo de log de erros
+ARQUIVO_DE_LOG_ERROS = r'C:\ProcessarAtos\erros.log'
 
-```
-C:\Meus-Documentos\
-├── Entrada\
-└── Saida\
-```
+# 4. Caminho COMPLETO para o executável do LibreOffice
+#    (Verifique onde ele foi instalado no seu sistema)
+CAMINHO_SOFFICE = r'C:\Program Files\LibreOffice\program\soffice.exe'
 
-*(Nota: este é apenas um caminho de exemplo. Você pode criar a estrutura de pastas em qualquer local de sua preferência.)*
+# 5. Limite máximo de tamanho (em Megabytes) para cada arquivo .txt gerado
+MAX_TAMANHO_TXT_MB = 2
 
-**2. Configure o Script:**
-Abra o arquivo `UnificarAtos_Versao_2.py` e ajuste as variáveis de configuração no topo do arquivo para que correspondam às pastas que você criou.
+Atenção: O caminho para CAMINHO_SOFFICE é crucial. Verifique o local correto da instalação do LibreOffice no seu computador. Em sistemas Windows, o caminho padrão geralmente é o que está no exemplo.
 
-**3. Adicione os Arquivos:**
-Copie todos os documentos `.doc` e `.docx` a serem unificados para a pasta de `Entrada`.
+Como Usar
+Prepare o Ambiente: Certifique-se de que todos os pré-requisitos foram instalados e que as configurações no script estão corretas.
 
-**4. Execute o Script:**
-Navegue até a pasta do projeto via terminal e execute o comando:
+Organize os Arquivos: Coloque todos os seus arquivos .doc e .docx dentro da pasta definida em PASTA_DE_ENTRADA. Você pode organizá-los em subpastas se desejar, pois o script fará uma busca recursiva.
 
-```bash
-python UnificarAtos_Versao_2.py
-```
+Crie as Pastas de Saída: Crie o diretório onde os arquivos de saída e o log de erros serão salvos (ex: C:\ProcessarAtos\Saida).
 
-**5. Aguarde a Conclusão:**
-Uma barra de progresso indicará o andamento. O processo pode levar várias horas, dependendo do volume de arquivos `.doc`.
+Execute o Script: Abra um terminal ou prompt de comando, navegue até a pasta onde o script processador_atos.py está salvo e execute o seguinte comando:
 
-## 📄 Entendendo os Arquivos de Saída
+python processador_atos.py
 
-Ao final do processo, você encontrará os seguintes arquivos:
+Acompanhe o Processo: A barra de progresso mostrará o andamento. Mensagens de erro ou a criação de novos arquivos de texto serão exibidas no terminal.
 
-  * **`Atos_Unificados.txt`:** Arquivo de texto puro com o conteúdo limpo de todos os documentos.
-  * **`Atos_Unificados.jsonl`:** Arquivo formatado onde cada linha é um objeto JSON contendo a fonte (`fonte`) e o conteúdo (`conteudo`) de um documento.
-  * **`erros.log`:** Relatório com a lista de arquivos que apresentaram falhas durante o processo.
-  * **Pasta `convertidos_docx`:** Subpasta criada no diretório de entrada, que armazena as versões `.docx` dos arquivos `.doc` processados.
+Verifique os Resultados: Ao final do processo, os arquivos .txt consolidados estarão na pasta de saída. Se houverem erros, consulte o erros.log para mais detalhes.
+
+Estrutura dos Arquivos de Saída
+Cada arquivo de texto gerado (Atos_Unificados_1.txt, etc.) terá a seguinte estrutura para cada documento processado:
+
+--- INÍCIO DO DOCUMENTO: nome_do_arquivo_original.docx ---
+
+[Conteúdo completo do documento sem texto tachado]
+
+--- FIM DO DOCUMENTO: nome_do_arquivo_original.docx ---
+
+Este projeto é distribuído sob a licença MIT. Sinta-se à vontade para contribuir, reportar problemas ou sugerir melhorias.
