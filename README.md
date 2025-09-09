@@ -57,3 +57,43 @@ CAMINHO_SOFFICE = r'C:\Program Files\LibreOffice\program\soffice.exe'
 
 # 5. Limite máximo de tamanho (em Megabytes) para cada arquivo .txt gerado
 MAX_TAMANHO_TXT_MB = 2
+````
+
+**Atenção:** O caminho para `CAMINHO_SOFFICE` é crucial. Verifique o local correto da instalação do LibreOffice no seu computador. Em sistemas Windows, o caminho padrão geralmente é o que está no exemplo.
+
+## Como Usar
+
+1.  **Prepare o Ambiente:** Certifique-se de que todos os pré-requisitos foram instalados e que as configurações no script estão corretas.
+
+2.  **Organize os Arquivos:** Coloque todos os seus arquivos `.doc` e `.docx` dentro da pasta definida em `PASTA_DE_ENTRADA`. Você pode organizá-los em subpastas se desejar, pois o script fará uma busca recursiva.
+
+3.  **Crie as Pastas de Saída:** Crie o diretório onde os arquivos de saída e o log de erros serão salvos (ex: `C:\ProcessarAtos\Saida`).
+
+4.  **Execute o Script:** Abra um terminal ou prompt de comando, navegue até a pasta onde o script `processador_atos.py` está salvo e execute o seguinte comando:
+
+    ```bash
+    python processador_atos.py
+    ```
+
+5.  **Acompanhe o Processo:** A barra de progresso mostrará o andamento. Mensagens de erro ou a criação de novos arquivos de texto serão exibidas no terminal.
+
+6.  **Verifique os Resultados:** Ao final do processo, os arquivos `.txt` consolidados estarão na pasta de saída. Se houverem erros, consulte o `erros.log` para mais detalhes.
+
+## Estrutura dos Arquivos de Saída
+
+Cada arquivo de texto gerado (`Atos_Unificados_1.txt`, etc.) terá a seguinte estrutura para cada documento processado:
+
+```text
+--- INÍCIO DO DOCUMENTO: nome_do_arquivo_original.docx ---
+
+[Conteúdo completo do documento sem texto tachado]
+
+--- FIM DO DOCUMENTO: nome_do_arquivo_original.docx ---
+```
+
+-----
+
+Este projeto é distribuído sob a licença MIT. Sinta-se à vontade para contribuir, reportar problemas ou sugerir melhorias.
+
+```
+```
