@@ -1,50 +1,45 @@
-Processador e Unificador de Atos Normativos
+# Processador e Unificador de Atos Normativos
+
 Este script em Python foi desenvolvido para automatizar o processo de consolidação de um grande volume de documentos de texto (.doc e .docx), como atos normativos, portarias, leis, etc. A ferramenta extrai o conteúdo textual, ignorando trechos revogados (tachados), e unifica tudo em arquivos de texto (.txt) com um tamanho máximo controlado, facilitando o manuseio e a análise posterior.
 
-Funcionalidades Principais
-Processamento em Lote: Varre recursivamente uma pasta de entrada e processa todos os arquivos .doc e .docx que encontrar.
+## Funcionalidades Principais
 
-Conversão Automática: Utiliza o LibreOffice em modo headless (sem interface gráfica) para converter arquivos do formato antigo .doc para o formato moderno .docx de forma transparente.
+-   **Processamento em Lote:** Varre recursivamente uma pasta de entrada e processa todos os arquivos `.doc` e `.docx` que encontrar.
+-   **Conversão Automática:** Utiliza o LibreOffice em modo *headless* (sem interface gráfica) para converter arquivos do formato antigo `.doc` para o formato moderno `.docx` de forma transparente.
+-   **Extração Inteligente de Conteúdo:**
+    -   Lê o conteúdo de parágrafos e tabelas.
+    -   Ignora de forma inteligente qualquer texto que esteja formatado como tachado (*strikethrough*), que é comumente usado para indicar trechos revogados.
+-   **Divisão de Arquivos por Tamanho:** Consolida o texto extraído em arquivos `.txt`. Quando um arquivo de saída atinge um limite de tamanho configurável (ex: 2MB), o script automaticamente cria um novo arquivo para continuar o processo (ex: `Atos_Unificados_1.txt`, `Atos_Unificados_2.txt`, etc.).
+-   **Log de Erros Detalhado:** Cria um arquivo de log (`erros.log`) que registra qualquer falha durante a conversão ou leitura de arquivos, informando qual documento apresentou problema e o motivo, facilitando a depuração.
+-   **Barra de Progresso:** Exibe uma barra de progresso (`tqdm`) para que o usuário possa acompanhar o andamento do processamento, especialmente útil para um grande número de arquivos.
 
-Extração Inteligente de Conteúdo:
+## Caso de Uso
 
-Lê o conteúdo de parágrafos e tabelas.
-
-Ignora de forma inteligente qualquer texto que esteja formatado como tachado (strikethrough), que é comumente usado para indicar trechos revogados.
-
-Divisão de Arquivos por Tamanho: Consolida o texto extraído em arquivos .txt. Quando um arquivo de saída atinge um limite de tamanho configurável (ex: 2MB), o script automaticamente cria um novo arquivo para continuar o processo (ex: Atos_Unificados_1.txt, Atos_Unificados_2.txt, etc.).
-
-Log de Erros Detalhado: Cria um arquivo de log (erros.log) que registra qualquer falha durante a conversão ou leitura de arquivos, informando qual documento apresentou problema e o motivo, facilitando a depuração.
-
-Barra de Progresso: Exibe uma barra de progresso (tqdm) para que o usuário possa acompanhar o andamento do processamento, especialmente útil para um grande número de arquivos.
-
-Caso de Uso
 Esta ferramenta é ideal para quem precisa:
 
-Criar um corpus textual a partir de milhares de documentos para projetos de Processamento de Linguagem Natural (NLP).
+-   Criar um *corpus* textual a partir de milhares de documentos para projetos de Processamento de Linguagem Natural (NLP).
+-   Consolidar uma base de conhecimento dispersa em vários arquivos para facilitar a busca e a consulta.
+-   Preparar documentos para importação em sistemas de gestão de conteúdo ou bases de dados.
+-   Arquivar de forma organizada o conteúdo de atos normativos, mantendo apenas o texto vigente.
 
-Consolidar uma base de conhecimento dispersa em vários arquivos para facilitar a busca e a consulta.
+## Pré-requisitos
 
-Preparar documentos para importação em sistemas de gestão de conteúdo ou bases de dados.
-
-Arquivar de forma organizada o conteúdo de atos normativos, mantendo apenas o texto vigente.
-
-Pré-requisitos
 Para executar o script, você precisará ter o seguinte instalado em seu sistema:
 
-Python 3.6+
+1.  **Python 3.6+**
+2.  **LibreOffice:** A suíte de escritório é necessária para a conversão de arquivos `.doc`.
+    -   Você pode baixar em [LibreOffice.org](https://www.libreoffice.org/download/download/).
+3.  **Bibliotecas Python:** Instale as dependências com o seguinte comando:
 
-LibreOffice: A suíte de escritório é necessária para a conversão de arquivos .doc.
+    ```bash
+    pip install python-docx tqdm
+    ```
 
-Você pode baixar em LibreOffice.org.
+## Configuração
 
-Bibliotecas Python: Instale as dependências com o seguinte comando:
+Antes de executar, você **precisa** ajustar as constantes no início do script `processador_atos.py`:
 
-pip install python-docx tqdm
-
-Configuração
-Antes de executar, você precisa ajustar as constantes no início do script processador_atos.py:
-
+```python
 # --- CONFIGURAÇÕES IMPORTANTES ---
 
 # 1. Pasta onde estão os seus arquivos .doc e .docx
@@ -62,31 +57,3 @@ CAMINHO_SOFFICE = r'C:\Program Files\LibreOffice\program\soffice.exe'
 
 # 5. Limite máximo de tamanho (em Megabytes) para cada arquivo .txt gerado
 MAX_TAMANHO_TXT_MB = 2
-
-Atenção: O caminho para CAMINHO_SOFFICE é crucial. Verifique o local correto da instalação do LibreOffice no seu computador. Em sistemas Windows, o caminho padrão geralmente é o que está no exemplo.
-
-Como Usar
-Prepare o Ambiente: Certifique-se de que todos os pré-requisitos foram instalados e que as configurações no script estão corretas.
-
-Organize os Arquivos: Coloque todos os seus arquivos .doc e .docx dentro da pasta definida em PASTA_DE_ENTRADA. Você pode organizá-los em subpastas se desejar, pois o script fará uma busca recursiva.
-
-Crie as Pastas de Saída: Crie o diretório onde os arquivos de saída e o log de erros serão salvos (ex: C:\ProcessarAtos\Saida).
-
-Execute o Script: Abra um terminal ou prompt de comando, navegue até a pasta onde o script processador_atos.py está salvo e execute o seguinte comando:
-
-python processador_atos.py
-
-Acompanhe o Processo: A barra de progresso mostrará o andamento. Mensagens de erro ou a criação de novos arquivos de texto serão exibidas no terminal.
-
-Verifique os Resultados: Ao final do processo, os arquivos .txt consolidados estarão na pasta de saída. Se houverem erros, consulte o erros.log para mais detalhes.
-
-Estrutura dos Arquivos de Saída
-Cada arquivo de texto gerado (Atos_Unificados_1.txt, etc.) terá a seguinte estrutura para cada documento processado:
-
---- INÍCIO DO DOCUMENTO: nome_do_arquivo_original.docx ---
-
-[Conteúdo completo do documento sem texto tachado]
-
---- FIM DO DOCUMENTO: nome_do_arquivo_original.docx ---
-
-Este projeto é distribuído sob a licença MIT. Sinta-se à vontade para contribuir, reportar problemas ou sugerir melhorias.
