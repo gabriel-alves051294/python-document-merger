@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import json
 import subprocess
 from tqdm import tqdm
 import docx
@@ -11,11 +10,14 @@ from docx.table import _Cell, Table
 
 # --- CONFIGURAÇÕES IMPORTANTES ---
 PASTA_DE_ENTRADA = r'C:\ProcessarAtos\Entrada'
-ARQUIVO_DE_SAIDA_TXT = r'C:\ProcessarAtos\Saida\Atos_Unificados.txt'
-ARQUIVO_DE_SAIDA_JSONL = r'C:\ProcessarAtos\Saida\Atos_Unificados.jsonl'
+# Nome base para os arquivos de saída de texto. A numeração será adicionada automaticamente.
+ARQUIVO_DE_SAIDA_TXT_BASE = r'C:\ProcessarAtos\Saida\Atos_Unificados'
 ARQUIVO_DE_LOG_ERROS = r'C:\ProcessarAtos\erros.log'
 # Caminho completo para o executável do LibreOffice
 CAMINHO_SOFFICE = r'C:\Program Files\LibreOffice\program\soffice.exe'
+# NOVO: Limite máximo de tamanho para cada arquivo .txt de saída em Megabytes
+MAX_TAMANHO_TXT_MB = 2
+MAX_TAMANHO_TXT_BYTES = MAX_TAMANHO_TXT_MB * 1024 * 1024
 
 
 # --- FIM DAS CONFIGURAÇÕES ---
@@ -136,9 +138,15 @@ def main():
     print(f"Total de arquivos encontrados: {len(arquivos_para_processar)}")
 
     arquivos_com_erro = 0
-    with open(ARQUIVO_DE_SAIDA_TXT, 'w', encoding='utf-8') as f_txt, \
-            open(ARQUIVO_DE_SAIDA_JSONL, 'w', encoding='utf-8') as f_jsonl, \
-            open(ARQUIVO_DE_LOG_ERROS, 'w', encoding='utf-8') as f_log:
+    arquivos_txt_gerados = []
+
+    # --- Gerenciamento do arquivo TXT ---
+    arquivo_txt_indice = 1
+    nome_arquivo_txt_atual = f"{ARQUIVO_DE_SAIDA_TXT_BASE}_{arquivo_txt_indice}.txt"
+    arquivos_txt_gerados.append(nome_arquivo_txt_atual)
+    f_txt = open(nome_arquivo_txt_atual, 'w', encoding='utf-8')
+
+    with open(ARQUIVO_DE_LOG_ERROS, 'w', encoding='utf-8') as f_log:
 
         f_log.write("Arquivos que falharam ou foram ignorados durante o processamento:\n")
 
@@ -152,24 +160,43 @@ def main():
                 texto_extraido = extrair_texto_de_docx(path_para_extrair, f_log)
                 if texto_extraido and texto_extraido.strip():
                     nome_original = os.path.basename(file_path)
-                    f_txt.write(
-                        f"--- INÍCIO DO DOCUMENTO: {nome_original} ---\n\n{texto_extraido}\n\n--- FIM DO DOCUMENTO: {nome_original} ---\n\n")
-                    ato_data = {"fonte": nome_original, "conteudo": texto_extraido}
-                    f_jsonl.write(json.dumps(ato_data, ensure_ascii=False) + '\n')
+
+                    # Prepara o conteúdo a ser escrito
+                    conteudo_para_escrever = (
+                        f"--- INÍCIO DO DOCUMENTO: {nome_original} ---\n\n"
+                        f"{texto_extraido}\n\n"
+                        f"--- FIM DO DOCUMENTO: {nome_original} ---\n\n"
+                    )
+                    tamanho_conteudo_bytes = len(conteudo_para_escrever.encode('utf-8'))
+
+                    # ALTERAÇÃO: Verifica o tamanho do arquivo antes de escrever
+                    if f_txt.tell() + tamanho_conteudo_bytes > MAX_TAMANHO_TXT_BYTES and f_txt.tell() > 0:
+                        f_txt.close()
+                        arquivo_txt_indice += 1
+                        nome_arquivo_txt_atual = f"{ARQUIVO_DE_SAIDA_TXT_BASE}_{arquivo_txt_indice}.txt"
+                        f_txt = open(nome_arquivo_txt_atual, 'w', encoding='utf-8')
+                        arquivos_txt_gerados.append(nome_arquivo_txt_atual)
+                        tqdm.write(
+                            f"\nLimite de {MAX_TAMANHO_TXT_MB}MB atingido. Criando novo arquivo: {nome_arquivo_txt_atual}")
+
+                    # Escreve no arquivo TXT
+                    f_txt.write(conteudo_para_escrever)
                 else:
-                    # CORREÇÃO: Registra no log quando o arquivo resulta em conteúdo vazio.
-                    # A verificação 'texto_extraido is not None' diferencia um erro de leitura (None) de um conteúdo vazio ("").
                     if texto_extraido is not None:
                         f_log.write(f"{file_path} - ARQUIVO IGNORADO: Conteúdo vazio ou apenas com texto revogado.\n")
                     arquivos_com_erro += 1
             else:
                 arquivos_com_erro += 1
 
-    print(f"\n--- Processo Concluído ---")
-    print(f"Arquivo de texto simples salvo em: {ARQUIVO_DE_SAIDA_TXT}")
-    print(f"Arquivo JSON Lines (.jsonl) salvo em: {ARQUIVO_DE_SAIDA_JSONL}")
+    f_txt.close()  # Garante que o último arquivo de texto seja fechado
+
+    print(f"\n--- Processo Concluido ---")
+    # MENSAGEM AJUSTADA para mostrar todos os arquivos gerados
+    print(f"Arquivos de texto salvos em:")
+    for nome_arquivo in arquivos_txt_gerados:
+        print(f"- {nome_arquivo}")
+
     if arquivos_com_erro > 0:
-        # MENSAGEM AJUSTADA
         print(f"Atenção: {arquivos_com_erro} arquivo(s) não puderam ser processados (por falha ou por estarem vazios).")
         print(f"Consulte o relatório de detalhes em: {ARQUIVO_DE_LOG_ERROS}")
     else:
