@@ -1,99 +1,75 @@
-# Processador e Unificador de Atos Normativos
+Processador de Atos Normativos
+Ferramenta de automação para classificar, converter e consolidar arquivos de atos normativos, otimizada para o fluxo de trabalho do TJMG.
 
-Este script em Python foi desenvolvido para automatizar o processo de consolidação de um grande volume de documentos de texto (.doc e .docx), como atos normativos, portarias, leis, etc. A ferramenta extrai o conteúdo textual, ignorando trechos revogados (tachados), e unifica tudo em arquivos de texto (.txt) com um tamanho máximo controlado, facilitando o manuseio e a análise posterior.
+Descrição
+Este projeto automatiza o tratamento de grandes volumes de documentos jurídicos (.doc e .docx). Ele foi desenvolvido para resolver um problema específico: separar atos normativos válidos dos revogados, padronizá-los para o formato .docx e consolidar seu conteúdo textual de forma organizada para análises futuras.
 
-## Funcionalidades Principais
+A ferramenta classifica os atos com base na formatação do texto (uso de "tachado" para indicar revogação), garantindo que apenas o conteúdo relevante seja processado e arquivado, replicando a estrutura de pastas original para manter a organização por categoria.
 
--   **Processamento em Lote:** Varre recursivamente uma pasta de entrada e processa todos os arquivos `.doc` e `.docx` que encontrar.
--   **Conversão Automática:** Utiliza o LibreOffice em modo *headless* (sem interface gráfica) para converter arquivos do formato antigo `.doc` para o formato moderno `.docx` de forma transparente.
--   **Extração Inteligente de Conteúdo:**
-    -   Lê o conteúdo de parágrafos e tabelas.
-    -   Ignora de forma inteligente qualquer texto que esteja formatado como tachado (*strikethrough*), que é comumente usado para indicar trechos revogados.
--   **Divisão de Arquivos por Tamanho:** Consolida o texto extraído em arquivos `.txt`. Quando um arquivo de saída atinge um limite de tamanho configurável (ex: 2MB), o script automaticamente cria um novo arquivo para continuar o processo (ex: `Atos_Unificados_1.txt`, `Atos_Unificados_2.txt`, etc.).
--   **Log de Erros Detalhado:** Cria um arquivo de log (`erros.log`) que registra qualquer falha durante a conversão ou leitura de arquivos, informando qual documento apresentou problema e o motivo, facilitando a depuração.
--   **Barra de Progresso:** Exibe uma barra de progresso (`tqdm`) para que o usuário possa acompanhar o andamento do processamento, especialmente útil para um grande número de arquivos.
+Recursos Principais
+Filtragem Automática: Identifica e descarta arquivos com mais de 90% do texto tachado, considerados revogados.
 
-## Caso de Uso
+Conversão em Lote: Converte arquivos do formato .doc para .docx de forma automática, utilizando o LibreOffice.
 
-Esta ferramenta é ideal para quem precisa:
+Estrutura de Pastas Espelhada: Organiza os arquivos de saída (.docx e .txt) em uma estrutura de diretórios idêntica à de entrada.
 
--   Criar um *corpus* textual a partir de milhares de documentos para projetos de Processamento de Linguagem Natural (NLP).
--   Consolidar uma base de conhecimento dispersa em vários arquivos para facilitar a busca e a consulta.
--   Preparar documentos para importação em sistemas de gestão de conteúdo ou bases de dados.
--   Arquivar de forma organizada o conteúdo de atos normativos, mantendo apenas o texto vigente.
+Limpeza de Conteúdo: Extrai o texto dos documentos, removendo qualquer trecho, palavra ou caractere que esteja formatado como tachado.
 
-## Pré-requisitos
+Consolidação Inteligente: Agrupa o conteúdo textual por categoria e o fragmenta em arquivos .txt com tamanho máximo de 2MB para facilitar a manipulação.
 
-Para executar o script, você precisará ter o seguinte instalado em seu sistema:
+Logging Detalhado: Gera um arquivo de log completo (log_processamento.log) registrando todas as ações, avisos e erros para fácil auditoria.
 
-1.  **Python 3.6+**
-2.  **LibreOffice:** A suíte de escritório é necessária para a conversão de arquivos `.doc`.
-    -   Você pode baixar em [LibreOffice.org](https://www.libreoffice.org/download/download/).
-3.  **Bibliotecas Python:** Instale as dependências com o seguinte comando:
+Estrutura de Diretórios
+Para que o script funcione corretamente, a seguinte estrutura de pastas deve ser criada na raiz C:\:
 
-    ```bash
-    pip install python-docx tqdm
-    ```
+C:\ProcessarAtos\
+│
+├── Entradas\
+│   ├── Categoria_A\
+│   │   ├── ato_01.doc
+│   │   └── ato_02.docx
+│   └── Categoria_B\
+│       └── ato_03.doc
+│
+├── Saida_DOCX\      (criado pelo script)
+├── Saida_TXT\       (criado pelo script)
+└── log_processamento.log  (criado pelo script)
 
-## Configuração
+Pré-requisitos
+Antes de executar, certifique-se de que você tem os seguintes softwares instalados:
 
-Antes de executar, você **precisa** ajustar as constantes no início do script `processador_atos.py`:
+Python 3.7+: Download Python
 
-```python
-# --- CONFIGURAÇÕES IMPORTANTES ---
+LibreOffice: Download LibreOffice
 
-# 1. Pasta onde estão os seus arquivos .doc e .docx
-PASTA_DE_ENTRADA = r'C:\ProcessarAtos\Entrada'
+Importante: O caminho para o executável do LibreOffice (soffice.exe) deve ser verificado e, se necessário, ajustado na variável CAMINHO_SOFFICE dentro do script.
 
-# 2. Caminho e nome base para os arquivos de texto que serão gerados
-ARQUIVO_DE_SAIDA_TXT_BASE = r'C:\ProcessarAtos\Saida\Atos_Unificados'
+Instalação
+Clone o repositório:
 
-# 3. Caminho para o arquivo de log de erros
-ARQUIVO_DE_LOG_ERROS = r'C:\ProcessarAtos\erros.log'
+git clone [https://github.com/seu-usuario/seu-repositorio.git](https://github.com/seu-usuario/seu-repositorio.git)
+cd seu-repositorio
 
-# 4. Caminho COMPLETO para o executável do LibreOffice
-#    (Verifique onde ele foi instalado no seu sistema)
-CAMINHO_SOFFICE = r'C:\Program Files\LibreOffice\program\soffice.exe'
+Crie um ambiente virtual (recomendado):
 
-# 5. Limite máximo de tamanho (em Megabytes) para cada arquivo .txt gerado
-MAX_TAMANHO_TXT_MB = 2
-````
+python -m venv venv
+venv\Scripts\activate  # No Windows
 
-**Atenção:** O caminho para `CAMINHO_SOFFICE` é crucial. Verifique o local correto da instalação do LibreOffice no seu computador. Em sistemas Windows, o caminho padrão geralmente é o que está no exemplo.
+Instale as dependências:
+O script utiliza as seguintes bibliotecas Python. Instale-as usando pip:
 
-## Como Usar
+pip install python-docx tqdm
 
-1.  **Prepare o Ambiente:** Certifique-se de que todos os pré-requisitos foram instalados e que as configurações no script estão corretas.
+Como Usar
+Prepare os arquivos: Coloque seus arquivos .doc e .docx dentro das respectivas subpastas de categoria em C:\ProcessarAtos\Entradas\.
 
-2.  **Organize os Arquivos:** Coloque todos os seus arquivos `.doc` e `.docx` dentro da pasta definida em `PASTA_DE_ENTRADA`. Você pode organizá-los em subpastas se desejar, pois o script fará uma busca recursiva.
+Ajuste as configurações: Abra o arquivo processador_revogados.py e verifique se os caminhos nas CONFIGURAÇÕES (como PASTA_ENTRADA e CAMINHO_SOFFICE) correspondem ao seu ambiente.
 
-3.  **Crie as Pastas de Saída:** Crie o diretório onde os arquivos de saída e o log de erros serão salvos (ex: `C:\ProcessarAtos\Saida`).
+Execute o script: Abra o terminal no diretório do projeto e execute o seguinte comando:
 
-4.  **Execute o Script:** Abra um terminal ou prompt de comando, navegue até a pasta onde o script `processador_atos.py` está salvo e execute o seguinte comando:
+python processador_revogados.py
 
-    ```bash
-    python processador_atos.py
-    ```
+Verifique os resultados: Após a execução, os arquivos convertidos estarão em Saida_DOCX, os textos consolidados em Saida_TXT e o log detalhado em log_processamento.log.
 
-5.  **Acompanhe o Processo:** A barra de progresso mostrará o andamento. Mensagens de erro ou a criação de novos arquivos de texto serão exibidas no terminal.
-
-6.  **Verifique os Resultados:** Ao final do processo, os arquivos `.txt` consolidados estarão na pasta de saída. Se houverem erros, consulte o `erros.log` para mais detalhes.
-
-## Estrutura dos Arquivos de Saída
-
-Cada arquivo de texto gerado (`Atos_Unificados_1.txt`, etc.) terá a seguinte estrutura para cada documento processado:
-
-```text
---- INÍCIO DO DOCUMENTO: nome_do_arquivo_original.docx ---
-
-[Conteúdo completo do documento sem texto tachado]
-
---- FIM DO DOCUMENTO: nome_do_arquivo_original.docx ---
-```
-
------
-
-Este projeto é distribuído sob a licença MIT. Sinta-se à vontade para contribuir, reportar problemas ou sugerir melhorias.
-
-```
-```
+Licença
+Este projeto está licenciado sob a Licença MIT. Veja o arquivo LICENSE para mais detalhes.
