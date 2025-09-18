@@ -1,44 +1,78 @@
 # -*- coding: utf-8 -*-
+"""
+Script para automação da classificação, conversão e consolidação de arquivos
+de atos normativos.
+
+Este script executa as seguintes etapas:
+1.  Filtra arquivos .doc e .docx, descartando os que são considerados
+    "revogados" (com mais de 90% do texto tachado).
+2.  Converte os arquivos válidos para o formato .docx, replicando a estrutura
+    de pastas de origem em um diretório de saída.
+3.  Para cada categoria (subpasta), consolida o texto limpo (sem tachados)
+    dos arquivos .docx válidos.
+4.  Fragmenta o texto consolidado de cada categoria em arquivos .txt de no
+    máximo 2MB, salvando-os em uma estrutura de pastas espelhada.
+"""
 
 import os
 import subprocess
+import shutil
+import logging
 from tqdm import tqdm
 import docx
 from docx.document import Document
 from docx.text.paragraph import Paragraph
 from docx.table import _Cell, Table
+from collections import defaultdict
+from typing import List, Optional, Tuple, Dict
 
-# --- CONFIGURAÇÕES IMPORTANTES ---
-PASTA_DE_ENTRADA = r'C:\ProcessarAtos\Entrada'
-# Nome base para os arquivos de saída de texto. A numeração será adicionada automaticamente.
-ARQUIVO_DE_SAIDA_TXT_BASE = r'C:\ProcessarAtos\Saida\Atos_Unificados'
-ARQUIVO_DE_LOG_ERROS = r'C:\ProcessarAtos\erros.log'
-# Caminho completo para o executável do LibreOffice
+# --- CONFIGURAções ---
+# 1. Estrutura de Diretórios
+PASTA_ENTRADA = r'C:\ProcessarAtos\Entrada'
+PASTA_SAIDA_DOCX = r'C:\ProcessarAtos\Saida_DOCX'
+PASTA_SAIDA_TXT = r'C:\ProcessarAtos\Saida_TXT'
+ARQUIVO_DE_LOG = r'C:\ProcessarAtos\log_processamento.log'
+
+# 2. Executáveis
 CAMINHO_SOFFICE = r'C:\Program Files\LibreOffice\program\soffice.exe'
-# NOVO: Limite máximo de tamanho para cada arquivo .txt de saída em Megabytes
-MAX_TAMANHO_TXT_MB = 2
-MAX_TAMANHO_TXT_BYTES = MAX_TAMANHO_TXT_MB * 1024 * 1024
 
-
+# 3. Regras de Processamento
+PERCENTUAL_MINIMO_TACHADO_PARA_IGNORAR: float = 90.0
+MAX_TAMANHO_TXT_MB: int = 2
+MAX_TAMANHO_TXT_BYTES: int = MAX_TAMANHO_TXT_MB * 1024 * 1024
 # --- FIM DAS CONFIGURAÇÕES ---
 
-def converter_doc_para_docx(doc_path, log_erros_file):
+
+def setup_logging():
+    """Configura o sistema de logging para registrar eventos em arquivo e no console."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(ARQUIVO_DE_LOG, mode='w', encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+
+
+def converter_doc_para_docx(doc_path: str, output_dir_especifico: Optional[str] = None) -> Optional[str]:
     """
-    Usa o LibreOffice para converter um arquivo .doc para .docx.
+    Usa o LibreOffice para converter .doc para .docx.
+
+    Args:
+        doc_path: Caminho completo para o arquivo .doc de origem.
+        output_dir_especifico: Diretório de destino para o arquivo convertido.
+                               Se None, usa uma pasta temporária.
+
+    Returns:
+        O caminho para o arquivo .docx convertido ou None em caso de falha.
     """
     try:
-        output_dir = os.path.join(os.path.dirname(doc_path), 'convertidos_docx')
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        output_dir = output_dir_especifico or os.path.join(os.path.dirname(doc_path), 'convertidos_temp')
+        os.makedirs(output_dir, exist_ok=True)
 
-        cmd = [
-            CAMINHO_SOFFICE,
-            '--headless',
-            '--convert-to', 'docx',
-            '--outdir', output_dir,
-            doc_path
-        ]
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = [CAMINHO_SOFFICE, '--headless', '--convert-to', 'docx', '--outdir', output_dir, doc_path]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
 
         base_name = os.path.basename(doc_path)
         new_docx_path = os.path.join(output_dir, os.path.splitext(base_name)[0] + '.docx')
@@ -49,158 +83,202 @@ def converter_doc_para_docx(doc_path, log_erros_file):
             raise FileNotFoundError("Arquivo convertido não foi encontrado após a execução do LibreOffice.")
 
     except FileNotFoundError:
-        msg = f"ERRO DE CONVERSÃO (.doc): O executável 'soffice.exe' não foi encontrado no caminho: {CAMINHO_SOFFICE}."
-        tqdm.write(msg)
-        log_erros_file.write(f"{doc_path} - FALHA NA CONVERSÃO: {msg}\n")
-        return None
+        logging.error(f"O executável 'soffice.exe' não foi encontrado em: {CAMINHO_SOFFICE}.")
+    except subprocess.TimeoutExpired:
+        logging.error(f"Timeout ao converter '{os.path.basename(doc_path)}'. O processo demorou mais de 120s.")
     except subprocess.CalledProcessError as e:
-        msg = f"ERRO DE CONVERSÃO (.doc) para o arquivo '{os.path.basename(doc_path)}': {e.stderr.decode('utf-8', errors='ignore')}"
-        tqdm.write(msg)
-        log_erros_file.write(f"{doc_path} - FALHA NA CONVERSÃO: {msg}\n")
-        return None
+        logging.error(f"Erro do LibreOffice ao converter '{os.path.basename(doc_path)}': {e.stderr.decode('utf-8', errors='ignore')}")
     except Exception as e:
-        msg = f"ERRO INESPERADO na conversão de '{os.path.basename(doc_path)}': {e}"
-        tqdm.write(msg)
-        log_erros_file.write(f"{doc_path} - FALHA NA CONVERSÃO: {msg}\n")
-        return None
-
-
-def obter_texto_sem_tachado(paragrafo):
-    """
-    Concatena o texto de trechos ('runs') de um parágrafo que não estão tachados.
-    """
-    texto_valido = []
-    for run in paragrafo.runs:
-        if not run.font.strike:
-            texto_valido.append(run.text)
-    return "".join(texto_valido)
+        logging.error(f"Erro inesperado ao converter '{os.path.basename(doc_path)}': {e}", exc_info=True)
+    
+    return None
 
 
 def iter_block_items(parent):
-    """Itera sobre parágrafos e tabelas na ordem correta dentro de um elemento."""
-    if isinstance(parent, Document):
-        parent_elm = parent.element.body
-    elif isinstance(parent, _Cell):
-        parent_elm = parent._tc
-    else:
-        raise ValueError("Tipo de 'parent' não suportado")
+    """Iterador que produz parágrafos e tabelas na ordem correta do documento."""
+    if isinstance(parent, Document): parent_elm = parent.element.body
+    elif isinstance(parent, _Cell): parent_elm = parent._tc
+    else: raise ValueError("Tipo de 'parent' não suportado")
+    
     for child in parent_elm.iterchildren():
-        if isinstance(child, docx.oxml.text.paragraph.CT_P):
-            yield Paragraph(child, parent)
-        elif isinstance(child, docx.oxml.table.CT_Tbl):
-            yield docx.table.Table(child, parent)
+        if isinstance(child, docx.oxml.text.paragraph.CT_P): yield Paragraph(child, parent)
+        elif isinstance(child, docx.oxml.table.CT_Tbl): yield docx.table.Table(child, parent)
 
 
-def extrair_texto_de_docx(docx_path, log_erros_file):
+def analisar_percentual_tachado(docx_path: str) -> float:
     """
-    Extrai texto de um arquivo .docx, ignorando trechos tachados e lendo tabelas.
+    Analisa um arquivo .docx e retorna o percentual de caracteres tachados.
+
+    Args:
+        docx_path: Caminho para o arquivo .docx.
+
+    Returns:
+        O percentual de texto tachado (0.0 a 100.0), ou -1.0 em caso de erro.
+    """
+    try:
+        documento = docx.Document(docx_path)
+        total_caracteres, caracteres_tachados = 0, 0
+
+        def contar_runs(runs):
+            nonlocal total_caracteres, caracteres_tachados
+            for run in runs:
+                num_chars = len(run.text)
+                total_caracteres += num_chars
+                if run.font.strike: caracteres_tachados += num_chars
+
+        for block in iter_block_items(documento):
+            if isinstance(block, Paragraph): contar_runs(block.runs)
+            elif isinstance(block, Table):
+                for row in block.rows:
+                    for cell in row.cells:
+                        for p in cell.paragraphs: contar_runs(p.runs)
+        
+        return (caracteres_tachados / total_caracteres) * 100 if total_caracteres > 0 else 0.0
+    except Exception as e:
+        logging.error(f"Erro ao analisar '{os.path.basename(docx_path)}': {e}", exc_info=True)
+        return -1.0
+
+
+def extrair_texto_limpo_de_docx(docx_path: str) -> Optional[str]:
+    """
+    Extrai texto de um .docx, ignorando completamente qualquer trecho tachado.
+
+    Args:
+        docx_path: Caminho para o arquivo .docx.
+
+    Returns:
+        O texto limpo como uma string, ou None em caso de erro.
     """
     try:
         documento = docx.Document(docx_path)
         texto_completo = []
+        obter_texto_run = lambda p: "".join([run.text for run in p.runs if not run.font.strike])
+
         for block in iter_block_items(documento):
-            if isinstance(block, Paragraph):
-                texto_completo.append(obter_texto_sem_tachado(block))
+            if isinstance(block, Paragraph): texto_completo.append(obter_texto_run(block))
             elif isinstance(block, Table):
                 for row in block.rows:
-                    celulas_limpas = ["\n".join([obter_texto_sem_tachado(p) for p in cell.paragraphs]) for cell in
-                                      row.cells]
-                    texto_completo.append("\t".join(celulas_limpas))
+                    celulas = ["\n".join([obter_texto_run(p) for p in cell.paragraphs]) for cell in row.cells]
+                    texto_completo.append("\t".join(celulas))
         return "\n".join(filter(None, texto_completo))
     except Exception as e:
-        msg = f"ERRO ao ler o arquivo '{os.path.basename(docx_path)}': {e}"
-        tqdm.write(msg)
-        log_erros_file.write(f"{docx_path} - FALHA NA LEITURA: {msg}\n")
+        logging.error(f"Erro ao extrair texto de '{os.path.basename(docx_path)}': {e}", exc_info=True)
         return None
+
+
+def etapa_1_filtrar_revogados(todos_arquivos: List[str]) -> List[str]:
+    """Filtra a lista de arquivos, retornando apenas os que não são revogados."""
+    logging.info("--- ETAPA 1: Analisando e filtrando arquivos revogados ---")
+    arquivos_validos = []
+    for file_path in tqdm(todos_arquivos, desc="Analisando arquivos"):
+        path_analise = file_path
+        is_doc = file_path.lower().endswith('.doc')
+        
+        if is_doc: path_analise = converter_doc_para_docx(file_path)
+        
+        if path_analise:
+            percentual = analisar_percentual_tachado(path_analise)
+            if 0 <= percentual < PERCENTUAL_MINIMO_TACHADO_PARA_IGNORAR:
+                arquivos_validos.append(file_path)
+            else:
+                logging.warning(f"IGNORADO (REVOGADO): '{file_path}' ({percentual:.2f}% tachado)")
+            if is_doc and os.path.exists(os.path.dirname(path_analise)):
+                shutil.rmtree(os.path.dirname(path_analise), ignore_errors=True)
+    return arquivos_validos
+
+
+def etapa_2_converter_validos(arquivos_validos: List[str]) -> Dict[str, List[str]]:
+    """Converte arquivos válidos para .docx e os organiza por categoria."""
+    logging.info(f"--- ETAPA 2: Convertendo {len(arquivos_validos)} arquivo(s) válido(s) para a pasta Saida_DOCX ---")
+    categorias = defaultdict(list)
+    for file_path in tqdm(arquivos_validos, desc="Convertendo para .docx"):
+        try:
+            relative_path = os.path.relpath(os.path.dirname(file_path), PASTA_ENTRADA)
+            dest_folder = os.path.join(PASTA_SAIDA_DOCX, relative_path)
+            os.makedirs(dest_folder, exist_ok=True)
+
+            nome_sem_ext = os.path.splitext(os.path.basename(file_path))[0]
+            caminho_final_docx = os.path.join(dest_folder, f"{nome_sem_ext}.docx")
+
+            if file_path.lower().endswith('.docx'): shutil.copy(file_path, caminho_final_docx)
+            else: converter_doc_para_docx(file_path, dest_folder)
+            
+            if os.path.exists(caminho_final_docx):
+                categorias[relative_path].append(caminho_final_docx)
+            else:
+                logging.error(f"Falha ao gerar o arquivo .docx final para: {file_path}")
+        except Exception as e:
+            logging.error(f"Erro ao processar a conversão de {file_path}: {e}", exc_info=True)
+    return categorias
+
+
+def etapa_3_4_consolidar_e_gerar_txt(categorias: Dict[str, List[str]]):
+    """Consolida e gera arquivos .txt para cada categoria."""
+    logging.info("--- ETAPA 3/4: Consolidando e gerando arquivos .txt por categoria ---")
+    for relative_path, lista_docx in tqdm(categorias.items(), desc="Processando categorias"):
+        dest_folder_txt = os.path.join(PASTA_SAIDA_TXT, relative_path)
+        os.makedirs(dest_folder_txt, exist_ok=True)
+        
+        nome_categoria = os.path.basename(relative_path).lower().replace(" ", "_") if relative_path != '.' else 'raiz'
+        nome_base_txt = f"{nome_categoria}_consolidadas"
+        
+        bloco_texto_categoria = []
+        for docx_path in lista_docx:
+            texto_limpo = extrair_texto_limpo_de_docx(docx_path)
+            if texto_limpo and texto_limpo.strip():
+                nome_original = os.path.basename(docx_path)
+                bloco_texto_categoria.append(f"--- INÍCIO DO DOCUMENTO: {nome_original} ---\n\n{texto_limpo}\n\n--- FIM DO DOCUMENTO: {nome_original} ---\n\n")
+        
+        if not bloco_texto_categoria: continue
+
+        arquivo_txt_indice = 1
+        nome_arquivo_atual = os.path.join(dest_folder_txt, f"{nome_base_txt}_{arquivo_txt_indice:02d}.txt")
+        f_txt = open(nome_arquivo_atual, 'w', encoding='utf-8')
+        
+        try:
+            for conteudo_doc in bloco_texto_categoria:
+                tamanho_bytes = len(conteudo_doc.encode('utf-8'))
+                if f_txt.tell() + tamanho_bytes > MAX_TAMANHO_TXT_BYTES and f_txt.tell() > 0:
+                    f_txt.close()
+                    arquivo_txt_indice += 1
+                    nome_arquivo_atual = os.path.join(dest_folder_txt, f"{nome_base_txt}_{arquivo_txt_indice:02d}.txt")
+                    f_txt = open(nome_arquivo_atual, 'w', encoding='utf-8')
+                f_txt.write(conteudo_doc)
+        finally:
+            f_txt.close()
 
 
 def main():
     """Função principal que orquestra todo o processo."""
-    print("Iniciando o processo de unificação de atos normativos (.doc e .docx).")
+    setup_logging()
+    logging.info(">>> INICIANDO PROCESSO DE CLASSIFICAÇÃO, CONVERSÃO E CONSOLIDAÇÃO DE ATOS NORMATIVOS <<<")
+    
+    os.makedirs(PASTA_SAIDA_DOCX, exist_ok=True)
+    os.makedirs(PASTA_SAIDA_TXT, exist_ok=True)
+    
+    try:
+        todos_arquivos = [os.path.join(r, f) for r, _, fs in os.walk(PASTA_ENTRADA) for f in fs if f.lower().endswith(('.doc', '.docx')) and not f.startswith('~')]
+        if not todos_arquivos:
+            logging.warning(f"Nenhum arquivo .doc ou .docx encontrado em '{PASTA_ENTRADA}'.")
+            return
 
-    if not os.path.isdir(PASTA_DE_ENTRADA):
-        print(f"ERRO CRÍTICO: A pasta de entrada não foi encontrada: '{PASTA_DE_ENTRADA}'")
-        return
+        # Etapa 1
+        arquivos_validos = etapa_1_filtrar_revogados(todos_arquivos)
+        
+        # Etapa 2
+        categorias = etapa_2_converter_validos(arquivos_validos)
+        
+        # Etapa 3 e 4
+        etapa_3_4_consolidar_e_gerar_txt(categorias)
 
-    arquivos_para_processar = []
-    print("Buscando arquivos...")
-    for root, _, files in os.walk(PASTA_DE_ENTRADA):
-        if os.path.basename(root) == 'convertidos_docx':
-            continue
-        for file in files:
-            if file.lower().endswith(('.doc', '.docx')) and not file.startswith('~'):
-                arquivos_para_processar.append(os.path.join(root, file))
+        logging.info("--- PROCESSO CONCLUÍDO COM SUCESSO ---")
+        logging.info(f"Arquivos válidos convertidos para .docx salvos em: '{PASTA_SAIDA_DOCX}'")
+        logging.info(f"Textos consolidados por categoria salvos em: '{PASTA_SAIDA_TXT}'")
 
-    if not arquivos_para_processar:
-        print(f"Nenhum arquivo .doc ou .docx encontrado em '{PASTA_DE_ENTRADA}'. Verifique a pasta e as permissões.")
-        return
-
-    print(f"Total de arquivos encontrados: {len(arquivos_para_processar)}")
-
-    arquivos_com_erro = 0
-    arquivos_txt_gerados = []
-
-    # --- Gerenciamento do arquivo TXT ---
-    arquivo_txt_indice = 1
-    nome_arquivo_txt_atual = f"{ARQUIVO_DE_SAIDA_TXT_BASE}_{arquivo_txt_indice}.txt"
-    arquivos_txt_gerados.append(nome_arquivo_txt_atual)
-    f_txt = open(nome_arquivo_txt_atual, 'w', encoding='utf-8')
-
-    with open(ARQUIVO_DE_LOG_ERROS, 'w', encoding='utf-8') as f_log:
-
-        f_log.write("Arquivos que falharam ou foram ignorados durante o processamento:\n")
-
-        for file_path in tqdm(arquivos_para_processar, desc="Processando arquivos"):
-            path_para_extrair = file_path
-
-            if file_path.lower().endswith('.doc'):
-                path_para_extrair = converter_doc_para_docx(file_path, f_log)
-
-            if path_para_extrair:
-                texto_extraido = extrair_texto_de_docx(path_para_extrair, f_log)
-                if texto_extraido and texto_extraido.strip():
-                    nome_original = os.path.basename(file_path)
-
-                    # Prepara o conteúdo a ser escrito
-                    conteudo_para_escrever = (
-                        f"--- INÍCIO DO DOCUMENTO: {nome_original} ---\n\n"
-                        f"{texto_extraido}\n\n"
-                        f"--- FIM DO DOCUMENTO: {nome_original} ---\n\n"
-                    )
-                    tamanho_conteudo_bytes = len(conteudo_para_escrever.encode('utf-8'))
-
-                    # ALTERAÇÃO: Verifica o tamanho do arquivo antes de escrever
-                    if f_txt.tell() + tamanho_conteudo_bytes > MAX_TAMANHO_TXT_BYTES and f_txt.tell() > 0:
-                        f_txt.close()
-                        arquivo_txt_indice += 1
-                        nome_arquivo_txt_atual = f"{ARQUIVO_DE_SAIDA_TXT_BASE}_{arquivo_txt_indice}.txt"
-                        f_txt = open(nome_arquivo_txt_atual, 'w', encoding='utf-8')
-                        arquivos_txt_gerados.append(nome_arquivo_txt_atual)
-                        tqdm.write(
-                            f"\nLimite de {MAX_TAMANHO_TXT_MB}MB atingido. Criando novo arquivo: {nome_arquivo_txt_atual}")
-
-                    # Escreve no arquivo TXT
-                    f_txt.write(conteudo_para_escrever)
-                else:
-                    if texto_extraido is not None:
-                        f_log.write(f"{file_path} - ARQUIVO IGNORADO: Conteúdo vazio ou apenas com texto revogado.\n")
-                    arquivos_com_erro += 1
-            else:
-                arquivos_com_erro += 1
-
-    f_txt.close()  # Garante que o último arquivo de texto seja fechado
-
-    print(f"\n--- Processo Concluido ---")
-    # MENSAGEM AJUSTADA para mostrar todos os arquivos gerados
-    print(f"Arquivos de texto salvos em:")
-    for nome_arquivo in arquivos_txt_gerados:
-        print(f"- {nome_arquivo}")
-
-    if arquivos_com_erro > 0:
-        print(f"Atenção: {arquivos_com_erro} arquivo(s) não puderam ser processados (por falha ou por estarem vazios).")
-        print(f"Consulte o relatório de detalhes em: {ARQUIVO_DE_LOG_ERROS}")
-    else:
-        print("Todos os arquivos foram processados com sucesso.")
+    except Exception as e:
+        logging.critical(f"Ocorreu um erro fatal no processo: {e}", exc_info=True)
+    finally:
+        logging.info(">>> FIM DA EXECUÇÃO <<<")
 
 
 if __name__ == "__main__":
